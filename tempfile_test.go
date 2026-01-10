@@ -64,7 +64,7 @@ func TestOpenTempFile(t *testing.T) {
 
 			dir := t.TempDir()
 
-			for i := 0; i < count; i++ {
+			for i := range count {
 				perm := [...]os.FileMode{0600, 0755, 0411}[i%3]
 				maskedPerm := perm & ^umask
 
@@ -369,7 +369,7 @@ func TestTempFileNoCommit(t *testing.T) {
 				t.Errorf("TempFile(%q) failed: %v", tc.path, err)
 			}
 
-			for i := 0; i < 3; i++ {
+			for range 3 {
 				if err := pf.Cleanup(); err != nil {
 					t.Errorf("Cleanup() failed: %v", err)
 				}
