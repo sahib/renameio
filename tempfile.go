@@ -17,7 +17,7 @@
 package renameio
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -27,7 +27,7 @@ import (
 const defaultPerm os.FileMode = 0o600
 
 // nextrandom is a function generating a random number.
-var nextrandom = rand.Int63
+var nextrandom = rand.Int64
 
 // openTempFile creates a randomly named file and returns an open handle. It is
 // similar to os.CreateTemp except that the directory must be given, the file
