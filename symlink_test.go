@@ -24,11 +24,7 @@ import (
 )
 
 func TestSymlink(t *testing.T) {
-	d, err := os.MkdirTemp("", "tempdirtest")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(d)
+	d := t.TempDir()
 
 	want := []byte("Hello World")
 	if err := os.WriteFile(filepath.Join(d, "hello.txt"), want, 0644); err != nil {
@@ -41,6 +37,34 @@ func TestSymlink(t *testing.T) {
 		}
 
 		got, err := os.ReadFile(filepath.Join(d, "hi.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("unexpected content: got %q, want %q", string(got), string(want))
+		}
+	}
+}
+
+func TestSymlinkRoot(t *testing.T) {
+	tmp := t.TempDir()
+	root, err := os.OpenRoot(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	want := []byte("Hello World")
+	if err := root.WriteFile("hello.txt", want, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	for range 2 {
+		if err := SymlinkRoot(root, "hello.txt", "hi.txt"); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := root.ReadFile("hi.txt")
 		if err != nil {
 			t.Fatal(err)
 		}

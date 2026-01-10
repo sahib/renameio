@@ -293,6 +293,78 @@ func TestPendingFileCreation(t *testing.T) {
 	}
 }
 
+func TestPendingFileCreationRoot(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmp, "rel"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	for _, tc := range []struct {
+		name        string
+		path        string
+		options     []Option
+		wantContent string
+		wantPerm    os.FileMode
+	}{
+		{
+			name:     "default",
+			path:     "new.txt",
+			options:  []Option{WithRoot(root)},
+			wantPerm: 0o600,
+		},
+		{
+			name:     "relative path",
+			path:     "rel/new.txt",
+			options:  []Option{WithRoot(root)},
+			wantPerm: 0o600,
+		},
+		{
+			name:     "setup with perm",
+			path:     "perm.txt",
+			options:  []Option{WithRoot(root), WithStaticPermissions(0o754)},
+			wantPerm: 0o754,
+		},
+		{
+			name:     "overwrite existing with perm",
+			path:     "perm.txt",
+			options:  []Option{WithRoot(root), WithExistingPermissions()},
+			wantPerm: 0o754,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pf, err := NewPendingFile(tc.path, tc.options...)
+			if err != nil {
+				t.Fatalf("NewPendingFile(%q, %+v) failed: %v", tc.path, tc.options, err)
+			}
+
+			if _, err := pf.Write([]byte(tc.wantContent)); err != nil {
+				t.Fatalf("Write(%q) failed: %v", tc.path, err)
+			}
+
+			if err := pf.CloseAtomicallyReplace(); err != nil {
+				t.Fatal(err)
+			}
+
+			got, err := os.ReadFile(filepath.Join(tmp, tc.path))
+			if err != nil {
+				t.Errorf("ReadFile(%q) failed: %v", tc.path, err)
+			} else if string(got) != tc.wantContent {
+				t.Errorf("Read unexpected content %q from %q, want %q", string(got), tc.path, tc.wantContent)
+			}
+
+			if fi, err := os.Stat(filepath.Join(tmp, tc.path)); err != nil {
+				t.Errorf("Stat(%q) failed: %v", tc.path, err)
+			} else if got := fi.Mode() & os.ModePerm; got != tc.wantPerm {
+				t.Errorf("%q has permissions 0%o, want 0%o", tc.path, got, tc.wantPerm)
+			}
+		})
+	}
+}
+
 func TestPendingFileClosing(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -327,6 +399,63 @@ func TestPendingFileClosing(t *testing.T) {
 			pf.Close()
 
 			got, err := os.ReadFile(tc.path)
+			if tc.wantMissing {
+				if !errors.Is(err, os.ErrNotExist) {
+					t.Errorf("Expected %q to be missing, got: %v", tc.path, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("ReadFile(%q) failed: %v", tc.path, err)
+				} else if string(got) != tc.wantContent {
+					t.Errorf("Read unexpected content %q from %q, want %q", string(got), tc.path, tc.wantContent)
+				}
+			}
+		})
+	}
+}
+
+func TestPendingFileClosingRoot(t *testing.T) {
+	tmp := t.TempDir()
+	root, err := os.OpenRoot(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	for _, tc := range []struct {
+		name        string
+		path        string
+		options     []Option
+		wantMissing bool
+		wantContent string
+	}{
+		{
+			name:        "default: Close() closes underlying file",
+			path:        "new.txt",
+			options:     []Option{WithRoot(root)},
+			wantMissing: true,
+		},
+		{
+			name:        "WithReplaceOnClose",
+			path:        "new.txt",
+			options:     []Option{WithRoot(root), WithReplaceOnClose()},
+			wantMissing: false,
+			wantContent: "tempfile new file",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pf, err := NewPendingFile(tc.path, tc.options...)
+			if err != nil {
+				t.Errorf("NewPendingFile(%q, %+v) failed: %v", tc.path, tc.options, err)
+			}
+
+			if _, err := pf.Write([]byte(tc.wantContent)); err != nil {
+				t.Errorf("Write(%q) failed: %v", tc.path, err)
+			}
+
+			pf.Close()
+
+			got, err := os.ReadFile(filepath.Join(tmp, tc.path))
 			if tc.wantMissing {
 				if !errors.Is(err, os.ErrNotExist) {
 					t.Errorf("Expected %q to be missing, got: %v", tc.path, err)
@@ -382,6 +511,61 @@ func TestTempFileNoCommit(t *testing.T) {
 	}
 
 	if got, err := os.ReadFile(pathExisting); err != nil {
+		t.Errorf("ReadFile(%q) failed: %v", pathExisting, err)
+	} else if want := "foobar"; string(got) != want {
+		t.Errorf("Read unexpected content %q from %q, want %q", string(got), pathExisting, want)
+	}
+}
+
+func TestTempFileNoCommitRoot(t *testing.T) {
+	tmp := t.TempDir()
+	root, err := os.OpenRoot(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	const (
+		pathNew      = "new.txt"
+		pathExisting = "existing.txt"
+	)
+
+	if err := root.WriteFile(pathExisting, []byte("foobar"), 0644); err != nil {
+		t.Errorf("WriteFile(%q) failed: %v", pathExisting, err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		path string
+	}{
+		{
+			name: "new file",
+			path: pathNew,
+		},
+		{
+			name: "existing",
+			path: pathExisting,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pf, err := NewPendingFile(tc.path, WithRoot(root))
+			if err != nil {
+				t.Errorf("TempFile(%q) failed: %v", tc.path, err)
+			}
+
+			for range 3 {
+				if err := pf.Cleanup(); err != nil {
+					t.Errorf("Cleanup() failed: %v", err)
+				}
+			}
+		})
+	}
+
+	if _, err := root.Stat(pathNew); !os.IsNotExist(err) {
+		t.Errorf("Stat(%q) didn't report that file doesn't exist: %v", pathNew, err)
+	}
+
+	if got, err := root.ReadFile(pathExisting); err != nil {
 		t.Errorf("ReadFile(%q) failed: %v", pathExisting, err)
 	} else if want := "foobar"; string(got) != want {
 		t.Errorf("Read unexpected content %q from %q, want %q", string(got), pathExisting, want)
