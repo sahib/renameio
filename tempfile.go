@@ -17,7 +17,6 @@
 package renameio
 
 import (
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -31,7 +30,7 @@ const defaultPerm os.FileMode = 0o600
 var nextrandom = rand.Int63
 
 // openTempFile creates a randomly named file and returns an open handle. It is
-// similar to ioutil.TempFile except that the directory must be given, the file
+// similar to os.CreateTemp except that the directory must be given, the file
 // permissions can be controlled and patterns in the name are not supported.
 // The name is always suffixed with a random number.
 func openTempFile(dir, name string, perm os.FileMode) (*os.File, error) {
@@ -82,7 +81,7 @@ func tempDir(dir, dest string) string {
 	// the TMPDIR environment variable.
 	tmpdir := os.TempDir()
 
-	testsrc, err := ioutil.TempFile(tmpdir, "."+filepath.Base(dest))
+	testsrc, err := os.CreateTemp(tmpdir, "."+filepath.Base(dest))
 	if err != nil {
 		return fallback
 	}
@@ -94,7 +93,7 @@ func tempDir(dir, dest string) string {
 	}()
 	testsrc.Close()
 
-	testdest, err := ioutil.TempFile(filepath.Dir(dest), "."+filepath.Base(dest))
+	testdest, err := os.CreateTemp(filepath.Dir(dest), "."+filepath.Base(dest))
 	if err != nil {
 		return fallback
 	}
@@ -266,9 +265,9 @@ func Symlink(oldname, newname string) error {
 		return err
 	}
 
-	// We need to use ioutil.TempDir, as we cannot overwrite a ioutil.TempFile,
+	// We need to use os.MkdirTemp, as we cannot overwrite a os.CreateTemp file,
 	// and removing+symlinking creates a TOCTOU race.
-	d, err := ioutil.TempDir(filepath.Dir(newname), "."+filepath.Base(newname))
+	d, err := os.MkdirTemp(filepath.Dir(newname), "."+filepath.Base(newname))
 	if err != nil {
 		return err
 	}

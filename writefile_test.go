@@ -19,7 +19,6 @@ package renameio
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -41,7 +40,7 @@ func TestWriteFile(t *testing.T) {
 						t.Fatal(err)
 					}
 
-					gotData, err := ioutil.ReadFile(filename)
+					gotData, err := os.ReadFile(filename)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -103,9 +102,9 @@ func TestWriteFileEquivalence(t *testing.T) {
 			fn:   WriteFile,
 		},
 		{
-			name: "ioutil",
+			name: "os",
 			fn: func(filename string, data []byte, perm os.FileMode, opts ...Option) error {
-				return ioutil.WriteFile(filename, data, perm)
+				return os.WriteFile(filename, data, perm)
 			},
 		},
 	} {
@@ -161,7 +160,7 @@ func TestWriteFileEquivalence(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotData, err := ioutil.ReadFile(filename)
+			gotData, err := os.ReadFile(filename)
 			if err != nil {
 				t.Fatal(err)
 			}

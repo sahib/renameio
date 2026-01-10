@@ -19,7 +19,6 @@ package renameio
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -87,7 +86,7 @@ func TestOpenTempFile(t *testing.T) {
 				}
 			}
 
-			if entries, err := ioutil.ReadDir(dir); err != nil {
+			if entries, err := os.ReadDir(dir); err != nil {
 				t.Errorf("ReadDir(%q) failed: %v", dir, err)
 			} else if len(entries) < count {
 				t.Errorf("Directory %q contains fewer than %d entries", dir, count)
@@ -127,7 +126,7 @@ func TestPendingFileCreation(t *testing.T) {
 		pathExisting:         "content",
 		pathExistingWithPerm: "",
 	} {
-		if err := ioutil.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 			t.Errorf("WriteFile(%q) failed: %v", path, err)
 		}
 	}
@@ -279,7 +278,7 @@ func TestPendingFileCreation(t *testing.T) {
 				t.Errorf("Cleanup() failed: %v", err)
 			}
 
-			if got, err := ioutil.ReadFile(tc.path); err != nil {
+			if got, err := os.ReadFile(tc.path); err != nil {
 				t.Errorf("ReadFile(%q) failed: %v", tc.path, err)
 			} else if string(got) != tc.want {
 				t.Errorf("Read unexpected content %q from %q, want %q", string(got), tc.path, tc.want)
@@ -347,7 +346,7 @@ func TestTempFileNoCommit(t *testing.T) {
 	pathNew := filepath.Join(t.TempDir(), "new.txt")
 	pathExisting := filepath.Join(t.TempDir(), "existing.txt")
 
-	if err := ioutil.WriteFile(pathExisting, []byte("foobar"), 0644); err != nil {
+	if err := os.WriteFile(pathExisting, []byte("foobar"), 0644); err != nil {
 		t.Errorf("WriteFile(%q) failed: %v", pathExisting, err)
 	}
 
@@ -382,7 +381,7 @@ func TestTempFileNoCommit(t *testing.T) {
 		t.Errorf("Stat(%q) didn't report that file doesn't exist: %v", pathNew, err)
 	}
 
-	if got, err := ioutil.ReadFile(pathExisting); err != nil {
+	if got, err := os.ReadFile(pathExisting); err != nil {
 		t.Errorf("ReadFile(%q) failed: %v", pathExisting, err)
 	} else if want := "foobar"; string(got) != want {
 		t.Errorf("Read unexpected content %q from %q, want %q", string(got), pathExisting, want)
