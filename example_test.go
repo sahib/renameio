@@ -35,7 +35,7 @@ func ExampleTempFile_justone() {
 		}
 		return t.CloseAtomicallyReplace()
 	}
-	// Thanks to the write package, a webserver exposing /srv/www never
+	// Thanks to the renameio package, a webserver exposing /srv/www never
 	// serves an incomplete or missing file.
 	if err := persist(31.2); err != nil {
 		log.Fatal(err)
@@ -59,7 +59,7 @@ func ExampleTempFile_many() {
 	}
 
 	// Imagine this was an endless loop, reading temperature sensor values.
-	// Thanks to the write package, a webserver exposing /srv/www never
+	// Thanks to the renameio package, a webserver exposing /srv/www never
 	// serves an incomplete or missing file.
 	for {
 		if err := persist(31.2); err != nil {
