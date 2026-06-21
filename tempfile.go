@@ -291,7 +291,15 @@ func NewPendingFile(path string, opts ...Option) (*PendingFile, error) {
 	var err error
 	var tmpname string
 	if cfg.root != nil {
-		tmpname, f, err = openTempFileRoot(cfg.root, "."+filepath.Base(cfg.path), cfg.createPerm)
+		// Under a root the temp file must live in the same root as the
+		// destination so the final rename does not cross out of it. WithTempDir
+		// (cfg.dir), if given, is honored as a directory relative to the root
+		// and must already exist; without it the temp lands at the root's top.
+		tmpname = "." + filepath.Base(cfg.path)
+		if cfg.dir != "" {
+			tmpname = filepath.Join(cfg.dir, tmpname)
+		}
+		tmpname, f, err = openTempFileRoot(cfg.root, tmpname, cfg.createPerm)
 	} else {
 		f, err = openTempFile(tempDir(cfg.dir, cfg.path), "."+filepath.Base(cfg.path), cfg.createPerm)
 	}

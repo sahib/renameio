@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -360,6 +361,107 @@ func TestPendingFileCreationRoot(t *testing.T) {
 				t.Errorf("Stat(%q) failed: %v", tc.path, err)
 			} else if got := fi.Mode() & os.ModePerm; got != tc.wantPerm {
 				t.Errorf("%q has permissions 0%o, want 0%o", tc.path, got, tc.wantPerm)
+			}
+		})
+	}
+}
+
+// TestPendingFileCreationRootTempDir verifies that under WithRoot the temp file
+// is created inside the WithTempDir directory (relative to the root) rather than
+// at the root's top level, and still commits to its destination.
+func TestPendingFileCreationRootTempDir(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmp, "staging"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmp, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	root, err := os.OpenRoot(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+
+	const dst = "sub/new.txt"
+	pf, err := NewPendingFile(dst, WithRoot(root), WithTempDir("staging"))
+	if err != nil {
+		t.Fatalf("NewPendingFile(%q) failed: %v", dst, err)
+	}
+
+	// While pending, the temp file lives in staging/ and nowhere else.
+	tmpName := filepath.Base(pf.tmpname)
+	if got := filepath.Dir(pf.tmpname); got != "staging" {
+		t.Errorf("temp file in %q, want it under staging/", pf.tmpname)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "staging", tmpName)); err != nil {
+		t.Errorf("temp file not found in staging/: %v", err)
+	}
+	for _, dir := range []string{".", "sub"} {
+		entries, err := os.ReadDir(filepath.Join(tmp, dir))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), ".new.txt") {
+				t.Errorf("stray temp file %q in %q, want it only under staging/", e.Name(), dir)
+			}
+		}
+	}
+
+	if _, err := pf.Write([]byte("hello")); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+	if err := pf.CloseAtomicallyReplace(); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(tmp, dst))
+	if err != nil {
+		t.Fatalf("ReadFile(%q) failed: %v", dst, err)
+	}
+	if string(got) != "hello" {
+		t.Errorf("got content %q, want %q", got, "hello")
+	}
+
+	// The temp file is gone after the commit.
+	if _, err := os.Stat(filepath.Join(tmp, "staging", tmpName)); !os.IsNotExist(err) {
+		t.Errorf("temp file still present after commit: %v", err)
+	}
+}
+
+// TestPendingFileCreationRootTempDirErrors verifies that an unusable WithTempDir
+// under WithRoot fails loudly at creation time rather than silently falling back
+// to another location or escaping the root. A temp dir that escapes the root
+// (via "..") or is absolute is rejected by os.Root; one that does not exist
+// fails because the temp file's parent is missing. No destination file is left
+// behind in any case.
+func TestPendingFileCreationRootTempDirErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		tempDir string
+	}{
+		{name: "escapes via dotdot", tempDir: ".." + string(os.PathSeparator) + "escape"},
+		{name: "absolute", tempDir: string(os.PathSeparator) + "tmp"},
+		{name: "does not exist", tempDir: "missing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			root, err := os.OpenRoot(tmp)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+
+			const dst = "new.txt"
+			pf, err := NewPendingFile(dst, WithRoot(root), WithTempDir(tc.tempDir))
+			if err == nil {
+				_ = pf.Cleanup()
+				t.Fatalf("NewPendingFile with temp dir %q succeeded, want error", tc.tempDir)
+			}
+
+			if _, statErr := os.Stat(filepath.Join(tmp, dst)); !os.IsNotExist(statErr) {
+				t.Errorf("destination %q exists after failed creation: %v", dst, statErr)
 			}
 		})
 	}

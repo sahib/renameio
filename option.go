@@ -33,6 +33,9 @@ func (fn optionFunc) apply(cfg *config) {
 // WithTempDir configures the directory to use for temporary, uncommitted
 // files. Suitable for using a cached directory from
 // TempDir(filepath.Base(path)).
+//
+// When combined with WithRoot, dir is interpreted relative to the root and
+// must name an existing directory within it.
 func WithTempDir(dir string) Option {
 	return optionFunc(func(cfg *config) {
 		cfg.dir = dir
@@ -89,8 +92,11 @@ func WithReplaceOnClose() Option {
 // WithRoot specifies a root directory to use when working with files.
 // See [os.Root] and https://go.dev/blog/osroot for more details.
 //
-// When WithRoot is used, WithTempDir (and the $TMPDIR environment variable) are
-// ignored, as temporary files must be created in the specified root directory.
+// The temporary file must be created within the root so it can be renamed onto
+// the destination without leaving it, so the $TMPDIR environment variable is
+// ignored. WithTempDir, if given, is honored but interpreted relative to the
+// root (see WithTempDir); without it the temporary file is created at the
+// root's top level.
 func WithRoot(root *os.Root) Option {
 	return optionFunc(func(c *config) {
 		c.root = root
